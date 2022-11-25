@@ -4,7 +4,7 @@
 
 // Package tiff is an enhanced version of x/image/tiff.
 //
-// It uses a consolidated version of compress/lzw (https://github.com/hhrutter/lzw) for compression and also adds support for CMYK.
+// It uses a consolidated version of compress/lzw (https://github.com/hhrutter/lzw) for compression and also adds support for CMYKAImg.
 //
 // More information: https://github.com/hhrutter/tiff
 package tiff
@@ -406,6 +406,19 @@ func (d *decoder) decode(dst image.Image, xmin, ymin, xmax, ymax int) error {
 			copy(img.Pix[min:max], d.buf[i0:i1])
 		}
 
+	case mCMYKA:
+		// d.bpp must be 8
+		img := dst.(*CMYKAImg)
+		for y := ymin; y < rMaxY; y++ {
+			min := img.PixOffset(xmin, y)
+			max := img.PixOffset(rMaxX, y)
+			i0, i1 := (y-ymin)*(xmax-xmin)*5, (y-ymin+1)*(xmax-xmin)*5
+			if i1 > len(d.buf) {
+				return errNoPixels
+			}
+			copy(img.Pix[min:max], d.buf[i0:i1])
+		}
+
 	}
 
 	return nil
@@ -545,9 +558,25 @@ func newDecoder(r io.Reader) (*decoder, error) {
 	case pCMYK:
 		d.mode = mCMYK
 		if d.bpp == 16 {
-			return nil, UnsupportedError(fmt.Sprintf("CMYK BitsPerSample of %v", d.bpp))
+			return nil, UnsupportedError(fmt.Sprintf("CMYKAImg BitsPerSample of %v", d.bpp))
 		}
 		d.config.ColorModel = color.CMYKModel
+
+		switch len(d.features[tBitsPerSample]) {
+		case 4:
+			d.mode = mCMYK
+			d.config.ColorModel = color.CMYKModel
+		case 5:
+			switch d.firstVal(tExtraSamples) {
+			case 1:
+				d.mode = mCMYKA
+				d.config.ColorModel = CMYKAModel
+			default:
+				return nil, FormatError("wrong number of samples for CMYKAImg")
+			}
+		default:
+			return nil, FormatError("wrong number of samples for CMYKAImg")
+		}
 
 	default:
 		return nil, UnsupportedError("color model")
@@ -654,6 +683,9 @@ func Decode(r io.Reader) (img image.Image, err error) {
 		}
 	case mCMYK:
 		img = image.NewCMYK(imgRect)
+
+	case mCMYKA:
+		img = NewCMYKA(imgRect)
 	}
 
 	for i := 0; i < blocksAcross; i++ {
