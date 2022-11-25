@@ -1,4 +1,4 @@
-module github.com/hhrutter/tiff
+module github.com/raceresult/tiff
 
 go 1.12
 
