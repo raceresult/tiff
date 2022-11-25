@@ -14,14 +14,16 @@ type CMYKA struct {
 }
 
 func (c CMYKA) RGBA() (uint32, uint32, uint32, uint32) {
-	r, g, b, a := color.CMYK{
+	r, g, b, _ := color.CMYK{
 		C: c.C,
 		M: c.M,
 		Y: c.Y,
 		K: c.K,
 	}.RGBA()
-	a = uint32(c.A)
-	return r, g, b, a
+
+	w := 0xffff - uint32(c.K)*0x101
+	a := uint32((0xffff - uint32(c.A)*0x101) * w / 0xffff)
+	return r, g, b, 65535 - a
 }
 
 // CMYKAModel is the Model for CMYKAImg colors.
